@@ -13,15 +13,15 @@ install_aliases()
 from urllib.parse import urljoin
 
 header_data = {
-    'Accept-Encoding': 'gzip, deflate, sdch',
-    'Accept-Language': 'en-US,en;q=0.8',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:61.0) Gecko/20100101 Firefox/61.0'
-                  'Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9'',image/webp,*/*;q=0.8',
-    'Cache-Control': 'max-age=0',
-    'Connection': 'keep-alive'
-}
+        'Host': 'stats.nba.com',
+        'Connection': 'keep-alive',
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36',
+        'Referer': 'https://stats.nba.com/',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
 
 class ObjectManager(object):
     def __init__(self, base_url, url_modifier, default_params=None, **kwargs):
@@ -29,6 +29,7 @@ class ObjectManager(object):
             default_params = {}
         self.base_url = base_url
         self.api_params = {}
+        self.data_tables = {}
         self._url_modifier = url_modifier
         self.set_default_api_parameters(**default_params)
         self.set_api_parameters(**kwargs)
@@ -49,11 +50,12 @@ class ObjectManager(object):
         return self.api_params
 
     @retrying.retry(stop_max_attempt_number=3, wait_fixed=1000,
-                    retry_on_exception=lambda exception: isinstance(exception, _requests.ConnectionError))
+                    retry_on_exception=lambda exception: isinstance(exception, (_requests.ConnectionError,
+                                                                                _requests.exceptions.ReadTimeout)))
     def _get_nba_data(self, api_params):
         pull_url = self.target_url
         self._response = _requests.get(pull_url, params=api_params,
-                                       headers=header_data)
+                                       headers=header_data, timeout=60)
 
         if self._response.status_code == 200:
             return self._response.json()
@@ -68,7 +70,7 @@ class ObjectManager(object):
                              "\n".join(txt))
 
     @staticmethod
-    def _get_table_from_data(nba_table, table_id):
+    def get_table_from_data(nba_table, table_id):
         try:
             headers = nba_table['resultSets'][table_id]['headers']
             values = nba_table['resultSets'][table_id]['rowSet']
@@ -79,7 +81,7 @@ class ObjectManager(object):
 
     def _set_class_data(self):
         nba_data_response = self._get_nba_data(self.api_params)
-        self._data_tables = nba_data_response
+        self.data_tables = nba_data_response
 
     def set_api_parameters(self, **kwargs):
         for k, v in kwargs.items():
